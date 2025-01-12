@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 
 const ConfirmationModal = ({ isOpen, onClose, onConfirm }) => {
   if (!isOpen) return null;
@@ -61,15 +62,18 @@ const App = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [placeholder, setPlaceholder] = useState("Lets talk about it...");
   const [showSkipConfirmation, setShowSkipConfirmation] = useState(false);
-  const [isSkipAllowed, setIsSkipAllowed] = useState(false); // Keep this for handling server responses
+  const [isSkipAllowed, setIsSkipAllowed] = useState(false);
+  const [isWaitingForAI, setIsWaitingForAI] = useState(false);
 
   const handleSkip = () => {
+    if (isWaitingForAI) return;
     setShowSkipConfirmation(true);
   };
 
   const confirmSkip = () => {
     if (socket && socket.readyState === WebSocket.OPEN) {
       try {
+        setIsWaitingForAI(true);
         socket.send(JSON.stringify({ user_response: "" }));
         setMessages((prevMessages) => [
           ...prevMessages,
@@ -77,6 +81,7 @@ const App = () => {
         ]);
       } catch (error) {
         console.error("Error sending skip message:", error);
+        setIsWaitingForAI(false);
       }
     }
     setShowSkipConfirmation(false);
@@ -85,7 +90,7 @@ const App = () => {
   useEffect(() => {
     const connectWebSocket = () => {
       const ws = new WebSocket("ws://localhost:8000/ws");
-      
+
       ws.onopen = () => {
         console.log("Connected to WebSocket");
         setSocket(ws);
@@ -99,7 +104,6 @@ const App = () => {
           console.log("Parsed WebSocket data:", data);
 
           if (data.AIresponce) {
-            // Handle the message text
             if (data.AIresponce.question) {
               setMessages((prevMessages) => [
                 ...prevMessages,
@@ -107,29 +111,30 @@ const App = () => {
               ]);
             }
 
-            // Handle skip_allowed status (store it but don't affect UI)
-            
             if (data.AIresponce && typeof data.AIresponce.skip_allowed !== 'undefined') {
               setIsSkipAllowed(data.AIresponce.skip_allowed);
-              setPlaceholder(data.AIresponce.skip_allowed ? 
-                "You can move to the next question" : 
+              setPlaceholder(data.AIresponce.skip_allowed ?
+                "You can move to the next question" :
                 "Wanna talk about it?"
               );
             }
           }
+          setIsWaitingForAI(false);
         } catch (error) {
           console.error("Error parsing WebSocket message:", error);
+          setIsWaitingForAI(false);
         }
       };
 
       ws.onclose = () => {
         console.log("WebSocket disconnected");
         setIsConnected(false);
-        setTimeout(connectWebSocket, 3000); // Reconnect after 3 seconds
+        setTimeout(connectWebSocket, 3000);
       };
 
       ws.onerror = (error) => {
         console.error("WebSocket error:", error);
+        setIsWaitingForAI(false);
         ws.close();
       };
     };
@@ -144,12 +149,12 @@ const App = () => {
   }, []);
 
   const handleSend = () => {
-    if (!message.trim() || !socket || socket.readyState !== WebSocket.OPEN) {
-      console.error("Cannot send message: WebSocket not connected");
+    if (!message.trim() || !socket || socket.readyState !== WebSocket.OPEN || isWaitingForAI) {
       return;
     }
 
     try {
+      setIsWaitingForAI(true);
       socket.send(JSON.stringify({ user_response: message }));
       setMessages((prevMessages) => [
         ...prevMessages,
@@ -158,6 +163,7 @@ const App = () => {
       setMessage("");
     } catch (error) {
       console.error("Error sending message:", error);
+      setIsWaitingForAI(false);
     }
   };
 
@@ -173,11 +179,12 @@ const App = () => {
       )}
 
       <div
-        className={`fixed left-1/2 bottom-0 z-50 bg-white rounded-lg shadow-lg overflow-hidden transform transition-transform ${isOpen ? "translate-y-14" : "translate-y-full"}`}
-        style={{ width: "400px", height: "900px", marginLeft: "-200px" }}
+        className={`fixed left-1/2 top-96 z-50 bg-white rounded-lg shadow-lg overflow-hidden transform transition-transform ${isOpen ? "-translate-y-1/2" : "translate-y-full"}`}
+        style={{ transition: "transform 0.3s", width: "400px", height: "600px", marginLeft: "-200px"}}
       >
         <div className="chatbot-popup-container">
-          <div className="chatbot-popup-header flex items-center justify-between bg-emerald-500 text-white px-4 py-2 h-16 -mb-4">
+          {/* Header */}
+          <div className="chatbot-popup-header flex items-center justify-between bg-emerald-500 text-white px-4 py-2 h-16 ">
             <div className="flex items-center rounded-full gap-2 bg-white h-10 w-10 justify-center border-2 border-lime-600">
               {chatboticon()}
             </div>
@@ -190,7 +197,8 @@ const App = () => {
             </button>
           </div>
 
-          <div className="chatbot-popup-body p-10 overflow-y-auto -z-10" style={{ height: "700px" }}>
+          {/* Body */}
+          <div className="chatbot-popup-body p-10 overflow-y-auto -z-10" style={{ height: "500px" }}>
             <div className="chatbot-popup-message">
               {messages.map((msg, index) =>
                 msg.type === "user" ? (
@@ -199,23 +207,43 @@ const App = () => {
                   <ChatbotMessage key={index} text={msg.text} />
                 )
               )}
+              {isWaitingForAI && (
+                <div className="relative p-4">
+                  <div className="absolute inset-0 flex justify-center items-center">
+                    <Loader2 className="animate-spin text-emerald-500" size={60} />
+                  </div>
+                  <div className="absolute inset-0 flex justify-center items-center">
+                    {chatboticon()}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="fixed bottom-36 chatbot-popup-footer flex items-center bg-gray-200 px-4 py-2 rounded-b-lg w-full">
+          {/* Footer */}
+          <div className="fixed bottom-[0.1px] chatbot-popup-footer flex items-center bg-gray-200 px-4 py-2 rounded-b-lg w-full">
             <input
               type="text"
-              placeholder={placeholder}
+              placeholder={isWaitingForAI ? "Please wait for AI response..." : placeholder}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               className="flex-1 border border-gray-300 rounded-lg p-2 mr-2"
+              disabled={isWaitingForAI}
             />
             {message.trim() ? (
-              <button onClick={handleSend} className="bg-blue-500 text-white px-4 py-2 rounded-lg">
+              <button
+                onClick={handleSend}
+                className={`bg-blue-500 text-white px-4 py-2 rounded-lg ${isWaitingForAI ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isWaitingForAI}
+              >
                 Send
               </button>
             ) : (
-              <button onClick={handleSkip} className="bg-red-500 text-lime-200 px-4 py-2 rounded-lg border-2 border-red-700">
+              <button
+                onClick={handleSkip}
+                className={`bg-red-500 text-lime-200 px-4 py-2 rounded-lg border-2 border-red-700 ${isWaitingForAI ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isWaitingForAI}
+              >
                 Skip
               </button>
             )}
