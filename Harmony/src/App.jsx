@@ -40,7 +40,7 @@ const ChatbotMessage = ({ text }) => {
       <div className="flex items-center rounded-full gap-2 bg-white h-10 w-10 justify-center border-2 border-lime-600">
         {chatboticon()}
       </div>
-      <p className="bg-gray-300 p-2 rounded-tl-2xl rounded-tr-2xl rounded-br-2xl rounded-bl-md max-w-[290px]">{text}</p>
+      <p className="bg-gray-300 p-2 rounded-tl-2xl rounded-tr-2xl rounded-br-2xl rounded-bl-md max-w-[290px] text-sm ">{text}</p>
     </div>
   );
 };
@@ -49,7 +49,7 @@ const UserMessage = ({ text }) => {
   return (
     <div className="user-message flex items-end space-x-3 flex-row-reverse gap-2 py-2 -mx-4">
       <i className="fa-regular fa-user bg-lime-600 h-10 w-10 rounded-full flex items-center justify-center text-white text-xl"></i>
-      <p className="bg-lime-200 p-2 rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl rounded-br-md max-w-[290px]">{text}</p>
+      <p className="bg-lime-200 p-2 rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl rounded-br-md max-w-[290px] text-sm">{text}</p>
     </div>
   );
 };
@@ -180,7 +180,7 @@ const App = () => {
 
       <div
         className={`fixed left-1/2 top-96 z-50 bg-white rounded-lg shadow-lg overflow-hidden transform transition-transform ${isOpen ? "-translate-y-1/2" : "translate-y-full"}`}
-        style={{ transition: "transform 0.3s", width: "400px", height: "600px", marginLeft: "-200px"}}
+        style={{ transition: "transform 0.3s", width: "400px", height: "700px", marginLeft: "-200px"}}
       >
         <div className="chatbot-popup-container">
           {/* Header */}
@@ -198,7 +198,7 @@ const App = () => {
           </div>
 
           {/* Body */}
-          <div className="chatbot-popup-body p-10 overflow-y-auto -z-10" style={{ height: "500px" }}>
+          <div className="chatbot-popup-body p-10 overflow-y-auto -z-10" style={{ height: "600px" }}>
             <div className="chatbot-popup-message">
               {messages.map((msg, index) =>
                 msg.type === "user" ? (
