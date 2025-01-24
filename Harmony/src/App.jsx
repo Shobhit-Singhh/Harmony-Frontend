@@ -62,7 +62,7 @@ const App = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [placeholder, setPlaceholder] = useState("Lets talk about it...");
   const [showSkipConfirmation, setShowSkipConfirmation] = useState(false);
-  const [isSkipAllowed, setIsSkipAllowed] = useState(false);
+  const [isSkipAllowed, setIsSkipAllowed] = useState(false);                  
   const [isWaitingForAI, setIsWaitingForAI] = useState(false);
 
   const handleSkip = () => {
