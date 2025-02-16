@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+
 import { Loader2 } from "lucide-react";
 
 const ConfirmationModal = ({ isOpen, onClose, onConfirm }) => {
@@ -54,15 +55,52 @@ const UserMessage = ({ text }) => {
   );
 };
 
+const renderJsonHierarchy = (data) => {
+  if (typeof data === "object" && data !== null) {
+    return (
+      <ul>
+        {Object.entries(data).map(([key, value], index) => (
+          <li key={index}>
+            <strong>{key}:</strong>
+            {typeof value === "object" ? (
+              <div className="ml-4">{renderJsonHierarchy(value)}</div>
+            ) : (
+              <span> {value}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    );
+  } else {
+    return <span>{data}</span>;
+  }
+};
+
+const LogsList = ({ text }) => {
+  return (
+    <div className="bg-green-300 p-4 rounded-xl text-left border-2 border-green-400 my-2">
+      {typeof text === "object" ? (
+        renderJsonHierarchy(text)
+      ) : (
+        <p className="text-xs text-gray-800 text-left">{text}</p>
+      )}
+    </div>
+  );
+};
+
+
+
 const App = () => {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
+  const [log, setlog] = useState([]);
+  const [logs, setlogs] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [placeholder, setPlaceholder] = useState("Lets talk about it...");
   const [showSkipConfirmation, setShowSkipConfirmation] = useState(false);
-  const [isSkipAllowed, setIsSkipAllowed] = useState(false);                  
+  const [isSkipAllowed, setIsSkipAllowed] = useState(false);
   const [isWaitingForAI, setIsWaitingForAI] = useState(false);
 
   const handleSkip = () => {
@@ -88,8 +126,12 @@ const App = () => {
   };
 
   useEffect(() => {
+    let ws;
+    let reconnectTimeout;
+
     const connectWebSocket = () => {
-      const ws = new WebSocket("ws://localhost:8000/ws");
+      ws = new WebSocket("ws://localhost:8000/ws");
+      // ws = new WebSocket("wss://harmony-ai-6x1o.onrender.com");
 
       ws.onopen = () => {
         console.log("Connected to WebSocket");
@@ -98,27 +140,49 @@ const App = () => {
       };
 
       ws.onmessage = (event) => {
-        console.log("Raw WebSocket message received:", event.data);
         try {
           const data = JSON.parse(event.data);
           console.log("Parsed WebSocket data:", data);
 
-          if (data.AIresponce) {
-            if (data.AIresponce.question) {
-              setMessages((prevMessages) => [
-                ...prevMessages,
-                { type: "chatbot", text: data.AIresponce.question },
-              ]);
-            }
+          if (data.AIresponce?.question) {
+            console.log("Question:", data.AIresponce.question);
+            setMessages((prev) => [
+              ...prev,
+              { type: "chatbot", text: data.AIresponce.question },
+            ]);
+          }
 
-            if (data.AIresponce && typeof data.AIresponce.skip_allowed !== 'undefined') {
-              setIsSkipAllowed(data.AIresponce.skip_allowed);
-              setPlaceholder(data.AIresponce.skip_allowed ?
-                "You can move to the next question" :
-                "Wanna talk about it?"
-              );
+          if (data.AIresponce?.skip_allowed !== undefined) {
+            setIsSkipAllowed(data.AIresponce.skip_allowed);
+            setPlaceholder(
+              data.AIresponce.skip_allowed
+                ? "You can move to the next question"
+                : "Wanna talk about it?"
+            );
+          }
+
+          if (data.AIresponce?.log) {
+            try {
+              let logData = data.AIresponce.log;
+
+              // Ensure logData is properly formatted as JSON
+              if (typeof logData === "string") {
+                logData = JSON.parse(logData.trim());
+              }
+
+              console.log("Parsed Log:", logData);
+
+              // Store parsed JSON directly instead of converting it to a string
+              setlogs((prevLogs) => [...prevLogs, { type: "log", text: logData }]);
+            } catch (error) {
+              console.error("Error parsing log:", error, "Raw Log Data:", data.AIresponce.log);
+
+              // Fallback: Store raw log safely if parsing fails
+              setlogs((prevLogs) => [...prevLogs, { type: "log", text: data.AIresponce.log }]);
             }
           }
+
+
           setIsWaitingForAI(false);
         } catch (error) {
           console.error("Error parsing WebSocket message:", error);
@@ -127,14 +191,13 @@ const App = () => {
       };
 
       ws.onclose = () => {
-        console.log("WebSocket disconnected");
+        console.log("WebSocket disconnected, reconnecting in 3 seconds...");
         setIsConnected(false);
-        setTimeout(connectWebSocket, 3000);
+        reconnectTimeout = setTimeout(connectWebSocket, 3000);
       };
 
       ws.onerror = (error) => {
         console.error("WebSocket error:", error);
-        setIsWaitingForAI(false);
         ws.close();
       };
     };
@@ -142,11 +205,13 @@ const App = () => {
     connectWebSocket();
 
     return () => {
-      if (socket) {
-        socket.close();
+      if (ws) {
+        ws.close();
       }
+      clearTimeout(reconnectTimeout);
     };
   }, []);
+
 
   const handleSend = () => {
     if (!message.trim() || !socket || socket.readyState !== WebSocket.OPEN || isWaitingForAI) {
@@ -178,9 +243,35 @@ const App = () => {
         </div>
       )}
 
+      {/* ---------------------------- Background Procession Log ---------------------------- */}
+      <div className="bg-gray-200 text-gray-800 text-xs text-center items-center justify-center w-full h-full border-2 border-gray-300 rounded-lg shadow-lg">
+        <p className="p-2 text-lg font-semibold border-b-2 border-zinc-300" >Harmony AI: Logs</p>
+        <div className="overflow-y-auto h-auto">
+          <div className="p-8 overflow-y-auto -z-10" style={{ maxHeight: "650px", height: "auto" }}>
+            <div>
+              {logs.map((msg, index) => (
+                <LogsList key={index} text={msg.text} />
+              ))}
+
+
+              {isWaitingForAI && (
+                <div className="relative p-40">
+                  <div className="absolute inset-0 flex justify-center items-center">
+                    <Loader2 className="animate-spin text-emerald-500" size={60} />
+                  </div>
+                  <div className="absolute inset-0 flex justify-center items-center">
+                    {chatboticon()}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div
-        className={`fixed left-1/2 top-96 z-50 bg-white rounded-lg shadow-lg overflow-hidden transform transition-transform ${isOpen ? "-translate-y-1/2" : "translate-y-full"}`}
-        style={{ transition: "transform 0.3s", width: "400px", height: "700px", marginLeft: "-200px"}}
+        className={`fixed left-1/2 top-80 z-50 bg-white rounded-lg shadow-lg overflow-hidden transform transition-transform ${isOpen ? "-translate-y-1/2" : "translate-y-full"}`}
+        style={{ transition: "transform 0.3s", width: "400px", height: "600px", marginLeft: "-200px" }}
       >
         <div className="chatbot-popup-container">
           {/* Header */}
@@ -198,7 +289,7 @@ const App = () => {
           </div>
 
           {/* Body */}
-          <div className="chatbot-popup-body p-10 overflow-y-auto -z-10" style={{ height: "600px" }}>
+          <div className="flex-grow chatbot-popup-body p-10 overflow-y-auto -z-10 flex flex-col" style={{ maxHeight: "500px", height: "auto" }}>
             <div className="chatbot-popup-message">
               {messages.map((msg, index) =>
                 msg.type === "user" ? (
@@ -208,11 +299,11 @@ const App = () => {
                 )
               )}
               {isWaitingForAI && (
-                <div className="relative p-4">
+                <div className="relative p-32">
                   <div className="absolute inset-0 flex justify-center items-center">
-                    <Loader2 className="animate-spin text-emerald-500" size={60} />
+                    <Loader2 className="animate-spin text-emerald-500" size={100} />
                   </div>
-                  <div className="absolute inset-0 flex justify-center items-center">
+                  <div className="absolute inset-0 flex justify-center items-center" size={400}>
                     {chatboticon()}
                   </div>
                 </div>
@@ -221,7 +312,7 @@ const App = () => {
           </div>
 
           {/* Footer */}
-          <div className="fixed bottom-[0.1px] chatbot-popup-footer flex items-center bg-gray-200 px-4 py-2 rounded-b-lg w-full">
+          <div className="fixed bottom-[.1px] chatbot-popup-footer flex items-center bg-gray-200 px-4 py-2 rounded-b-lg w-full">
             <input
               type="text"
               placeholder={isWaitingForAI ? "Please wait for AI response..." : placeholder}
@@ -248,6 +339,7 @@ const App = () => {
               </button>
             )}
           </div>
+
         </div>
       </div>
 
