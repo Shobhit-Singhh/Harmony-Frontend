@@ -130,8 +130,8 @@ const App = () => {
     let reconnectTimeout;
 
     const connectWebSocket = () => {
-      ws = new WebSocket("ws://localhost:8000/ws");
-      // ws = new WebSocket("wss://harmony-ai-6x1o.onrender.com");
+      // ws = new WebSocket("ws://localhost:8000/ws");
+      ws = new WebSocket("wss://harmony-ai-6x1o.onrender.com");
 
       ws.onopen = () => {
         console.log("Connected to WebSocket");
